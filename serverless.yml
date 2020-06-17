@@ -1,0 +1,60 @@
+service: NotifyMessageStatus
+
+plugins:
+  - serverless-pseudo-parameters
+  - serverless-offline
+
+package:
+  exclude:
+    - mocks/**
+    - tests/**
+    - db/**
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  stage: all
+  region: us-west-2
+
+  environment:
+    STAGE: "${self:custom.stage}"
+    RDS_DEV_ACCESS_ARN: "${self:custom.db.dev.credentials}"
+    RDS_DEV_INSTANCE_ARN: "${self:custom.db.dev.instance}"
+    RDS_TEST_ACCESS_ARN: "${self:custom.db.dev.credentials}"
+    RDS_TEST_INSTANCE_ARN: "${self:custom.db.dev.instance}"
+    RDS_STAGING_ACCESS_ARN: "${self:custom.db.dev.credentials}"
+    RDS_STAGING_INSTANCE_ARN: "${self:custom.db.dev.instance}"
+    RDS_PROD_ACCESS_ARN: "${self:custom.db.prod.credentials}"
+    RDS_PROD_INSTANCE_ARN: "${self:custom.db.prod.instance}"
+
+  iamRoleStatements:
+    # Allow access to RDS Data API.
+    - Effect: "Allow"
+      Action: 
+        - "rds-data:BatchExecuteStatement"
+        - "rds-data:BeginTransaction"
+        - "rds-data:CommitTransaction"
+        - "rds-data:ExecuteStatement"
+        - "rds-data:RollbackTransaction"
+      Resource: "*"
+    # Let the app get access credentials to the RDS database.
+    - Effect: "Allow"
+      Action:
+        - "secretsmanager:GetSecretValue"
+      Resource: "arn:aws:secretsmanager:#{AWS::Region}:#{AWS::AccountId}:secret:*"
+
+functions:
+  smsSuccess:
+    handler: functions/status-handler.sms
+  smsFailure:
+    handler: functions/status-handler.sms
+
+custom: 
+  stage: ${opt:stage, self:provider.stage}
+  db:
+    dev:
+      credentials: ${ssm:/notify/db/credentials/arn~true}
+      instance: ${ssm:/notify/db/instance/arn~true}
+    prod:
+      credentials: ${ssm:/notify/db/prod/credentials/arn~true}
+      instance: ${ssm:/notify/db/prod/instance/arn~true}
